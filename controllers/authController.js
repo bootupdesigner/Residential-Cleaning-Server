@@ -13,15 +13,24 @@ const SERVICE_RADIUS_MILES = 25; // Maximum service distance
 // 🔹 Function to get latitude & longitude from ZIP code
 const getCoordinatesFromZip = async (zip) => {
   try {
+    console.log(`🔹 Fetching coordinates for ZIP: ${zip}`);
     const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${zip}&country=US`);
     const data = await response.json();
-    if (data.length === 0) return null;
+
+    console.log("✅ Geolocation API Response:", data);
+
+    if (!data || data.length === 0) {
+      console.error(`❌ No coordinates found for ZIP: ${zip}`);
+      return null;
+    }
+
     return { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) };
   } catch (error) {
     console.error("❌ Error fetching coordinates:", error);
     return null;
   }
 };
+
 
 // ✅ Register User
 const registerUser = async (req, res) => {
