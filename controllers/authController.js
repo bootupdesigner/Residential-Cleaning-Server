@@ -28,7 +28,10 @@ const registerUser = async (req, res) => {
   const { firstName, lastName, email, password, phone, homeSize, serviceAddress, city, state, zipCode, role } = req.body;
 
   try {
-
+    const userCoords = await getCoordinatesFromZip(zipCode);
+    if (!userCoords) {
+      return res.status(400).json({ message: "Invalid ZIP code. Please enter a valid address." });
+    }
 
     console.log("✅ User Coordinates:", userCoords);
 
