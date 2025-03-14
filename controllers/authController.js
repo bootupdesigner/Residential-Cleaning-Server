@@ -2,12 +2,53 @@ const User = require("../models/userModel");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const calculateCleaningPrice = require('../utils/calculatePrice'); // Import price function
+const fetch = require("node-fetch");
+const geolib = require("geolib");
+
+const BASE_ZIP = "33024"; // Service ZIP code
+const BASE_LAT = 26.0241; // Latitude of 33024
+const BASE_LON = -80.2331; // Longitude of 33024
+const SERVICE_RADIUS_MILES = 25; // Maximum service distance
+
+// 🔹 Function to get latitude & longitude from ZIP code
+const getCoordinatesFromZip = async (zip) => {
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${zip}&country=US`);
+    const data = await response.json();
+    if (data.length === 0) return null;
+    return { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) };
+  } catch (error) {
+    console.error("❌ Error fetching coordinates:", error);
+    return null;
+  }
+};
 
 // ✅ Register User
 const registerUser = async (req, res) => {
   const { firstName, lastName, email, password, phone, homeSize, serviceAddress, city, state, zipCode, role } = req.body;
 
   try {
+
+
+    console.log("✅ User Coordinates:", userCoords);
+
+    // ✅ Calculate distance between user and base ZIP
+    const distanceMiles = geolib.convertDistance(
+      geolib.getDistance(
+        { latitude: BASE_LAT, longitude: BASE_LON },
+        { latitude: userCoords.latitude, longitude: userCoords.longitude }
+      ),
+      "mi"
+    );
+
+    console.log(`🔹 Distance from 33024: ${distanceMiles} miles`);
+
+    // ✅ If outside the service radius, reject registration
+    if (distanceMiles > SERVICE_RADIUS_MILES) {
+      return res.status(400).json({
+        message: `We currently do not service addresses more than ${SERVICE_RADIUS_MILES} miles from ZIP code 33024.`,
+      });
+    }
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ message: 'User already exists' });
 
