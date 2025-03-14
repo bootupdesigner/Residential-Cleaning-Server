@@ -1,0 +1,48 @@
+# 🛑 Ignore Node.js dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# 🛑 Ignore Environment Variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# 🛑 Ignore Logs
+logs/
+*.log
+logs/*.log
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# 🛑 Ignore Build Files
+build/
+dist/
+coverage/
+.cache/
+
+# 🛑 Ignore OS System Files
+.DS_Store
+Thumbs.db
+
+# 🛑 Ignore Temporary Files
+*.swp
+*.swo
+*.swn
+*.bak
+*.tmp
+*.log
+
+# 🛑 Ignore Debugging Files
+.vscode/
+.idea/
+*.iml
+
+# 🛑 Ignore Git Metadata (Optional)
+.git/
