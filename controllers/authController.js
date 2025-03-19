@@ -6,7 +6,6 @@ const axios = require("axios");
 const geolib = require("geolib");
 
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-const BASE_ZIP = "33024"; // Service ZIP code
 const BASE_LAT = 26.0241; // Latitude of 33024
 const BASE_LON = -80.2331; // Longitude of 33024
 const SERVICE_RADIUS_MILES = 25; // Maximum service distance
@@ -39,9 +38,14 @@ const getCoordinatesFromZip = async (zip) => {
 
 // ✅ Register User
 const registerUser = async (req, res) => {
-  const { firstName, lastName, email, password, phone, homeSize, serviceAddress, city, state, zipCode, role } = req.body;
 
   try {
+    const { firstName, lastName, email, password, phone, homeSize, serviceAddress, city, state, zipCode, role } = req.body;
+
+    if (!zipCode || typeof zipCode !== "string" || zipCode.length < 5) {
+      return res.status(400).json({ message: "Invalid ZIP code. Please enter a valid address." });
+    }
+
     const userCoords = await getCoordinatesFromZip(zipCode);
     if (!userCoords) {
       return res.status(400).json({ message: "Invalid ZIP code. Please enter a valid address." });
@@ -61,11 +65,13 @@ const registerUser = async (req, res) => {
     console.log(`🔹 Distance from 33024: ${distanceMiles} miles`);
 
     // ✅ If outside the service radius, reject registration
-    if (distanceMiles > SERVICE_RADIUS_MILES) {
+   if (distanceMiles > SERVICE_RADIUS_MILES) {
+      console.log("❌ User is outside the service area!");
       return res.status(400).json({
         message: `We currently do not service addresses more than ${SERVICE_RADIUS_MILES} miles from ZIP code 33024.`,
       });
     }
+    
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ message: 'User already exists' });
 
