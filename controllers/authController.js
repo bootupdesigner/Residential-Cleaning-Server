@@ -2,35 +2,40 @@ const User = require("../models/userModel");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const calculateCleaningPrice = require('../utils/calculatePrice'); // Import price function
-const fetch = require("node-fetch");
+const axios = require("axios");
 const geolib = require("geolib");
 
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 const BASE_ZIP = "33024"; // Service ZIP code
 const BASE_LAT = 26.0241; // Latitude of 33024
 const BASE_LON = -80.2331; // Longitude of 33024
 const SERVICE_RADIUS_MILES = 25; // Maximum service distance
 
-// 🔹 Function to get latitude & longitude from ZIP code
+// 🔹 Function to get latitude & longitude from ZIP code using Google Maps API
 const getCoordinatesFromZip = async (zip) => {
   try {
     console.log(`🔹 Fetching coordinates for ZIP: ${zip}`);
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${zip}&country=US`);
-    const data = await response.json();
+    const response = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json`, {
+      params: {
+        address: zip,
+        key: GOOGLE_MAPS_API_KEY,
+      },
+    });
 
-    console.log("✅ Geolocation API Response:", data);
-
-    if (!data || data.length === 0) {
+    if (!response.data.results || response.data.results.length === 0) {
       console.error(`❌ No coordinates found for ZIP: ${zip}`);
       return null;
     }
 
-    return { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) };
+    const location = response.data.results[0].geometry.location;
+    console.log("✅ Found Coordinates:", location);
+
+    return { latitude: location.lat, longitude: location.lng };
   } catch (error) {
-    console.error("❌ Error fetching coordinates:", error);
+    console.error("❌ Error fetching coordinates:", error.response?.data || error.message);
     return null;
   }
 };
-
 
 // ✅ Register User
 const registerUser = async (req, res) => {
