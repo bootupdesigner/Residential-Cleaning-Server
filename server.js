@@ -14,7 +14,7 @@ const webhookRoutes = require("./utils/webhooks");
 
 // ✅ CORS Setup
 const corsOptions = {
-  origin: ["http://localhost:8081", "http://localhost:3000", "https://jmacresidentialcleaning.netlify.app"],
+  origin: ["http://localhost:8081", "http://localhost:3000", "https://jmacresidentialcleaning.netlify.app", "https://jmacresidentialcleaning.com"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
