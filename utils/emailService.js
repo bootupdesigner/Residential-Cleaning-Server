@@ -7,15 +7,10 @@ const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 const GMAIL_USER = process.env.GMAIL_USER;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-const GMAIL_PASSWORD=process.env.EMAIL_PASSWORD
 
-const REDIRECT_URI = "https://residential-cleaning-server.onrender.com/oauth2callback"; 
+const REDIRECT_URI = "https://residential-cleaning-server.onrender.com/oauth2callback";
 
-const oAuth2Client = new google.auth.OAuth2(
-  CLIENT_ID,
-  CLIENT_SECRET,
-  REDIRECT_URI
-);
+const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
 oAuth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
 
 const sendBookingConfirmationEmail = async (user, booking) => {
@@ -26,21 +21,10 @@ const sendBookingConfirmationEmail = async (user, booking) => {
     console.log("⏰ Booking Time:", booking?.time || "No Time Found");
 
     // ✅ Step 1: Get a new access token
-    const accessToken = await oAuth2Client.getAccessToken();
-    console.log("✅ Access Token Retrieved:", accessToken?.token || "No Access Token");
+    const { token: accessToken } = await oAuth2Client.getAccessToken();
+    if (!accessToken) throw new Error("Failed to retrieve access token");
 
-    // ✅ Step 2: Ensure credentials are correctly loaded
-    if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN || !GMAIL_USER) {
-      console.error("❌ Missing OAuth2 credentials!");
-      return;
-    }
-
-    if (!user.email) {
-      console.error("❌ User email is missing!");
-      return;
-    }
-
-    // ✅ Step 3: Setup Nodemailer Transporter
+    // ✅ Step 2: Create Nodemailer transporter with access token
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -49,11 +33,11 @@ const sendBookingConfirmationEmail = async (user, booking) => {
         clientId: CLIENT_ID,
         clientSecret: CLIENT_SECRET,
         refreshToken: REFRESH_TOKEN,
+        accessToken,
       },
     });
-    
 
-    // ✅ Step 4: Configure Email
+    // ✅ Step 3: Prepare email content
     const mailOptions = {
       from: `"JMAC Cleaning Services" <${GMAIL_USER}>`,
       to: user.email,
@@ -75,13 +59,13 @@ const sendBookingConfirmationEmail = async (user, booking) => {
       `,
     };
 
-    // ✅ Step 5: Send Email
+    // ✅ Step 4: Send email
     const result = await transporter.sendMail(mailOptions);
     console.log("✅ Booking confirmation email sent successfully:", result.messageId);
 
     return result;
   } catch (error) {
-    console.error("❌ Error sending email:", error.response || error.message || error);
+    console.error("❌ Error sending email:", error.response?.data || error.message || error);
   }
 };
 
