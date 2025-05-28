@@ -11,31 +11,32 @@ const processPayment = async (req, res) => {
     console.log("🔹 Request Headers:", req.headers);
 
     // ✅ Extract userId from request body
-    let { userId, selectedAddOns = [], ceilingFanCount = 0, totalPrice } = req.body;
-
-    console.log("🔹 Received Payment Request:", { userId, selectedAddOns, ceilingFanCount, totalPrice });
+    const userId = req.user?.id;
+    const { selectedAddOns = [], ceilingFanCount = 0, totalPrice: providedTotal } = req.body;
 
     if (!userId) {
-      console.error("❌ Missing `userId` in request body:", req.body);
-      return res.status(400).json({ message: "User ID is missing. Please log in again." });
+      return res.status(401).json({ message: "User not authenticated." });
     }
 
     const user = await User.findById(userId);
+
     if (!user) {
       console.error("❌ User not found for ID:", userId);
       return res.status(404).json({ message: "User not found" });
     }
 
     // ✅ Ensure totalPrice is correctly calculated
+    let totalPrice = providedTotal;
+
     if (!totalPrice || totalPrice <= 0) {
       totalPrice = user.cleaningPrice || 0;
-
+    
       const addOnPrices = {
         windowCleaning: 15,
         ovenCleaning: 15,
         ceilingFanCleaning: 5,
       };
-
+    
       if (selectedAddOns.length > 0) {
         selectedAddOns.forEach((addOn) => {
           if (addOn === "ceilingFanCleaning") {
@@ -46,6 +47,7 @@ const processPayment = async (req, res) => {
         });
       }
     }
+    
 
     console.log("🔹 Final Total Price for Payment:", totalPrice);
 

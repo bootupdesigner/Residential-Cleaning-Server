@@ -40,7 +40,7 @@ const getCoordinatesFromZip = async (zip) => {
 const registerUser = async (req, res) => {
 
   try {
-    const { firstName, lastName, email, password, phone, homeSize, serviceAddress, city, state, zipCode, role } = req.body;
+    const { firstName, lastName, email, password, phone, homeType, homeSize, serviceAddress, city, state, zipCode, role } = req.body;
 
     if (!zipCode || typeof zipCode !== "string" || zipCode.length < 5) {
       return res.status(400).json({ message: "Invalid ZIP code. Please enter a valid address." });
@@ -90,6 +90,7 @@ const registerUser = async (req, res) => {
       city,
       state,
       zipCode,
+      homeType,
       homeSize,
       cleaningPrice, // Store calculated price
       role

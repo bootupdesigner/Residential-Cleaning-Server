@@ -9,7 +9,13 @@ const GMAIL_USER = process.env.GMAIL_USER;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const GMAIL_PASSWORD=process.env.EMAIL_PASSWORD
 
-const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET);
+const REDIRECT_URI = "https://developers.google.com/oauthplayground"; 
+
+const oAuth2Client = new google.auth.OAuth2(
+  CLIENT_ID,
+  CLIENT_SECRET,
+  REDIRECT_URI
+);
 oAuth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
 
 const sendBookingConfirmationEmail = async (user, booking) => {
@@ -38,10 +44,14 @@ const sendBookingConfirmationEmail = async (user, booking) => {
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
+        type: "OAuth2",
         user: GMAIL_USER,
-        pass: GMAIL_PASSWORD,
+        clientId: CLIENT_ID,
+        clientSecret: CLIENT_SECRET,
+        refreshToken: REFRESH_TOKEN,
       },
     });
+    
 
     // ✅ Step 4: Configure Email
     const mailOptions = {
@@ -71,7 +81,7 @@ const sendBookingConfirmationEmail = async (user, booking) => {
 
     return result;
   } catch (error) {
-    console.error("❌ Error sending email:", error);
+    console.error("❌ Error sending email:", error.response || error.message || error);
   }
 };
 

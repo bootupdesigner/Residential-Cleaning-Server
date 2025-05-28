@@ -137,9 +137,10 @@ const getUserBookings = async (req, res) => {
     }
 
     const bookings = await Booking.find({ userId })
-      .sort({ date: -1 })  // Sort by most recent date
-      .select('date time serviceAddress city state zipCode');
-
+    .populate("userId", "firstName lastName email")
+    .sort({ date: -1 })
+    .select("date time serviceAddress city state zipCode addOns userId");
+  
     res.status(200).json({ bookings });
   } catch (error) {
     console.error("❌ Error fetching bookings:", error);
