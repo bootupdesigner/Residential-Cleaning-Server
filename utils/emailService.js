@@ -9,7 +9,7 @@ const GMAIL_USER = process.env.GMAIL_USER;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const GMAIL_PASSWORD=process.env.EMAIL_PASSWORD
 
-const REDIRECT_URI = "https://developers.google.com/oauthplayground"; 
+const REDIRECT_URI = "https://residential-cleaning-server.onrender.com/oauth2callback"; 
 
 const oAuth2Client = new google.auth.OAuth2(
   CLIENT_ID,
