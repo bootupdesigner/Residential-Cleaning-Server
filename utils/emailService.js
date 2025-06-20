@@ -8,7 +8,7 @@ const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 const GMAIL_USER = process.env.GMAIL_USER;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 
-const REDIRECT_URI = "https://residential-cleaning-server.onrender.com/oauth2callback";
+const REDIRECT_URI = "https://developers.google.com/oauthplayground";
 
 const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
 oAuth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
