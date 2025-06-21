@@ -1,7 +1,6 @@
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const User = require("../models/userModel");
 
-
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("❌ Stripe Secret Key is missing in environment variables!");
 }
@@ -10,50 +9,48 @@ const processPayment = async (req, res) => {
   try {
     console.log("🔹 Request Headers:", req.headers);
 
-    // ✅ Extract userId from request body
     const userId = req.user?.id;
-    const { selectedAddOns = [], ceilingFanCount = 0, totalPrice: providedTotal } = req.body;
+    const {
+      selectedAddOns = [],
+      totalPrice: providedTotal,
+      payInFull = false, // ✅ NEW
+    } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: "User not authenticated." });
     }
 
     const user = await User.findById(userId);
-
     if (!user) {
       console.error("❌ User not found for ID:", userId);
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ✅ Ensure totalPrice is correctly calculated
+    // ✅ Recalculate total if not passed or invalid
     let totalPrice = providedTotal;
-
     if (!totalPrice || totalPrice <= 0) {
       totalPrice = user.cleaningPrice || 0;
-    
+
       const addOnPrices = {
-        windowCleaning: 15,
+        windowCleaning: 35,
         ovenCleaning: 15,
-        ceilingFanCleaning: 5,
+        baseboardCleaning: 70,
+        ceilingFanCleaning: 15,
+        doors: 25,
       };
-    
-      if (selectedAddOns.length > 0) {
-        selectedAddOns.forEach((addOn) => {
-          if (addOn === "ceilingFanCleaning") {
-            totalPrice += addOnPrices.ceilingFanCleaning * ceilingFanCount;
-          } else if (addOnPrices[addOn]) {
-            totalPrice += addOnPrices[addOn];
-          }
-        });
-      }
+
+      selectedAddOns.forEach((addOn) => {
+        if (addOnPrices[addOn]) {
+          totalPrice += addOnPrices[addOn];
+        }
+      });
     }
-    
 
-    console.log("🔹 Final Total Price for Payment:", totalPrice);
+    // ✅ Determine amount to charge
+    const amountToCharge = payInFull ? totalPrice : 25;
+    const amountInCents = Math.round(amountToCharge * 100);
 
-    const amountInCents = Math.round(totalPrice * 100);
-
-    console.log("🔹 Creating Stripe Payment Intent for:", amountInCents, "cents");
+    console.log(`🔹 Charging ${payInFull ? "full amount" : "$25 deposit"}: $${amountToCharge}`);
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInCents,
@@ -62,8 +59,9 @@ const processPayment = async (req, res) => {
       metadata: {
         userId: user._id.toString(),
         cleaningPrice: user.cleaningPrice,
+        payInFull,
+        depositPaid: !payInFull,
         addOns: selectedAddOns.length ? selectedAddOns.join(", ") : "None",
-        ceilingFanCount: ceilingFanCount || 0,
       },
     });
 
@@ -72,7 +70,7 @@ const processPayment = async (req, res) => {
     res.status(200).json({
       message: "Payment intent created",
       clientSecret: paymentIntent.client_secret,
-      totalAmount: totalPrice,
+      totalAmount: amountToCharge,
     });
 
   } catch (error) {
@@ -80,6 +78,7 @@ const processPayment = async (req, res) => {
     res.status(500).json({ message: "Payment processing failed", error: error.message });
   }
 };
+
 
 
 const getSavedCards = async (req, res) => {
