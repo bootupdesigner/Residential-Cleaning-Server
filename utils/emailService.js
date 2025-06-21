@@ -37,6 +37,33 @@ const sendBookingConfirmationEmail = async (user, booking) => {
       },
     });
 
+
+    const convertTo24Hour = (time) => {
+      const [timePart, period] = time.split(" ");
+      let [hours, minutes] = timePart.split(":");
+      if (period === "PM" && hours !== "12") hours = String(+hours + 12);
+      if (period === "AM" && hours === "12") hours = "00";
+      return `${hours.padStart(2, "0")}:${minutes}`;
+    };
+
+    // ✅ Generate Google Calendar link
+    const createCalendarLink = (booking) => {
+      const start = new Date(`${booking.date}T${convertTo24Hour(booking.time)}:00`);
+      const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); // 2-hour service
+
+      const formatISO = (d) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+
+      const dates = `${formatISO(start)}/${formatISO(end)}`;
+      const location = encodeURIComponent(`${booking.serviceAddress}, ${booking.city}, ${booking.state} ${booking.zipCode}`);
+      const details = encodeURIComponent("Your cleaning appointment with JMAC Cleaning Services.");
+      const title = encodeURIComponent("JMAC Cleaning Appointment");
+
+      return `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${location}`;
+    };
+
+    const calendarLink = createCalendarLink(booking);
+
+
     // ✅ Step 3: Prepare email content
     const mailOptions = {
       from: `"JMAC Cleaning Services" <${GMAIL_USER}>`,
@@ -54,6 +81,7 @@ const sendBookingConfirmationEmail = async (user, booking) => {
           <li><strong>Address:</strong> ${booking.serviceAddress}, ${booking.city}, ${booking.state} ${booking.zipCode}</li>
           <li><strong>Add-ons:</strong> ${booking.addOns.length > 0 ? booking.addOns.join(", ") : "None"}</li>
         </ul>
+        <p>📅 <a href="${calendarLink}" target="_blank">Add this appointment to your Google Calendar</a></p>
         <p>Thank you for choosing JMAC Cleaning Services.</p>
         <p>Best Regards,<br>JMAC Cleaning Services Team</p>
       `,
