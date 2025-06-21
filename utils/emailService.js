@@ -1,5 +1,9 @@
 const nodemailer = require("nodemailer");
 const { google } = require("googleapis");
+const { createEvent } = require('ics');
+const fs = require('fs');
+const path = require('path');
+
 
 // 🔹 OAuth2 Setup
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -63,6 +67,43 @@ const sendBookingConfirmationEmail = async (user, booking) => {
 
     const calendarLink = createCalendarLink(booking);
 
+    // ✅ Convert 12-hour time to [hour, minute]
+    const getTimeParts = (time) => {
+      const [timePart, period] = time.split(" ");
+      let [hour, minute] = timePart.split(":").map(Number);
+      if (period === "PM" && hour !== 12) hour += 12;
+      if (period === "AM" && hour === 12) hour = 0;
+      return [hour, minute];
+    };
+
+    // ✅ Generate .ics event file
+    const [hour, minute] = getTimeParts(booking.time);
+    const [year, month, day] = booking.date.split("-").map(Number); // YYYY-MM-DD
+
+    const event = {
+      start: [year, month, day, hour, minute],
+      duration: { hours: 2 },
+      title: 'JMAC Cleaning Appointment',
+      description: 'Your cleaning appointment with JMAC Cleaning Services.',
+      location: `${booking.serviceAddress}, ${booking.city}, ${booking.state} ${booking.zipCode}`,
+      status: 'CONFIRMED',
+      organizer: { name: 'JMAC Cleaning Services', email: GMAIL_USER },
+      attendees: [{ name: `${user.firstName} ${user.lastName}`, email: user.email }],
+    };
+
+    let icsAttachment = null;
+
+    createEvent(event, (error, value) => {
+      if (error) {
+        console.error("❌ ICS generation error:", error);
+      } else {
+        icsAttachment = {
+          filename: 'appointment.ics',
+          content: value,
+          contentType: 'text/calendar',
+        };
+      }
+    });
 
     // ✅ Step 3: Prepare email content
     const mailOptions = {
@@ -82,9 +123,13 @@ const sendBookingConfirmationEmail = async (user, booking) => {
           <li><strong>Add-ons:</strong> ${booking.addOns.length > 0 ? booking.addOns.join(", ") : "None"}</li>
         </ul>
         <p>📅 <a href="${calendarLink}" target="_blank">Add this appointment to your Google Calendar</a></p>
+       <p>📎 ICS calendar file is attached for Apple/Outlook users.</p>
+
         <p>Thank you for choosing JMAC Cleaning Services.</p>
         <p>Best Regards,<br>JMAC Cleaning Services Team</p>
       `,
+      attachments: icsAttachment ? [icsAttachment] : [],
+
     };
 
     // ✅ Step 4: Send email
