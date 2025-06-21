@@ -11,8 +11,8 @@ const UserSchema = new mongoose.Schema({
   zipCode: { type: String, required: true },
   homeType: { type: String, enum: ['house', 'apartment'], default: 'apartment', required: true },
   homeSize: {
-    bedrooms: { type: Number, enum: [1, 2, 3, 4], required: true },
-    bathrooms: { type: Number, enum: [1, 2, 3, 4], required: true },
+    bedrooms: { type: Number, enum: [1, 2, 3, 4, 5, 6, 7, 8, 9], required: true },
+    bathrooms: { type: Number, enum: [1, 2, 3, 4, 5, 6, 7, 8, 9], required: true },
   },
   cleaningPrice: { type: Number },
   availability: { 
