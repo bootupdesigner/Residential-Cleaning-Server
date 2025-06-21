@@ -65,13 +65,13 @@ const registerUser = async (req, res) => {
     console.log(`🔹 Distance from 33024: ${distanceMiles} miles`);
 
     // ✅ If outside the service radius, reject registration
-   if (distanceMiles > SERVICE_RADIUS_MILES) {
+    if (distanceMiles > SERVICE_RADIUS_MILES) {
       console.log("❌ User is outside the service area!");
       return res.status(400).json({
         message: `We currently do not service addresses more than ${SERVICE_RADIUS_MILES} miles from ZIP code 33024.`,
       });
     }
-    
+
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ message: 'User already exists' });
 
