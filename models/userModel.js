@@ -1,5 +1,10 @@
 const mongoose = require("mongoose");
 
+const AvailabilitySchema = new mongoose.Schema({
+  date: { type: String, required: true },  // Format: "YYYY-MM-DD"
+  times: [{ type: String, required: true }] // e.g. ["3:30 PM", "4:00 PM"]
+}, { _id: false });
+
 const UserSchema = new mongoose.Schema({
   firstName: { type: String, required: true },
   lastName: { type: String, required: true },
@@ -15,9 +20,9 @@ const UserSchema = new mongoose.Schema({
     bathrooms: { type: Number, enum: [1, 2, 3, 4, 5, 6, 7, 8, 9], required: true },
   },
   cleaningPrice: { type: Number },
-  availability: { 
-    type: Object, 
-    default: {}
+  availability: {
+    type: [AvailabilitySchema],
+    default: []
   },
   password: { type: String, required: true },
   role: { type: String, enum: ['admin', 'user'], default: 'user' },

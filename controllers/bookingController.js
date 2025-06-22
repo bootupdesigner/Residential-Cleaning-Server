@@ -23,63 +23,50 @@ const getBookingsByDate = async (req, res) => {
 const bookCleaning = async (req, res) => {
   try {
     const { userId, selectedDate, selectedTime, addOns } = req.body;
-
-    console.log("🔹 Received Booking Request:", req.body);
-
-    if (!userId) {
-      console.error("❌ User ID is missing in request body:", req.body);
-      return res.status(400).json({ message: "User ID is missing. Please log in again." });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      console.error("❌ User not found for ID:", userId);
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    console.log("✅ User Found:", user.firstName, user.lastName);
-
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
-      return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD." });
-    }
-
-    const today = new Date().toISOString().split("T")[0];
-    if (selectedDate < today) {
-      return res.status(400).json({ message: "You cannot select a past date. Please choose a future date." });
-    }
-
-    const admin = await User.findOne({ role: "admin" }).select("availability");
-    if (!admin) {
-      return res.status(404).json({ message: "Admin not found" });
-    }
-
-    let availabilityData = admin.availability instanceof Map
-      ? Object.fromEntries(admin.availability)
-      : { ...admin.availability };
-
-    if (!availabilityData[selectedDate] || !Array.isArray(availabilityData[selectedDate])) {
-      return res.status(400).json({ message: `No availability set for ${selectedDate}. Please choose another date.` });
-    }
-
     const formattedTime = selectedTime.trim();
-    const availableTimes = availabilityData[selectedDate].map(time => time.trim());
 
-    if (!availableTimes.includes(formattedTime)) {
-      return res.status(400).json({ message: `Selected time (${formattedTime}) is not available on ${selectedDate}.` });
+    if (!userId || !selectedDate || !selectedTime) {
+      return res.status(400).json({ message: "Missing booking details." });
     }
 
-    const existingBooking = await Booking.findOne({
-      date: selectedDate,
-      time: formattedTime,
-    });
+    // ✅ Validate user
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (existingBooking) {
-      return res.status(400).json({ message: `The time slot ${formattedTime} on ${selectedDate} is already booked. Please select another time.` });
+    // ✅ Fetch all admins
+    const admins = await User.find({ role: "admin" });
+    if (!admins.length) {
+      return res.status(404).json({ message: "No admins found." });
     }
 
+    // ✅ Fetch all existing bookings for the selected date & time
+    const existingBookings = await Booking.find({ date: selectedDate, time: formattedTime });
+
+    // ✅ Attempt to assign available admin
+    let assignedAdmin = null;
+
+    for (const admin of admins) {
+      const slot = admin.availability.find(s => s.date === selectedDate);
+      const isAvailable = slot?.times?.includes(formattedTime);
+
+      const isAlreadyBooked = existingBookings.some(b => b.adminId.toString() === admin._id.toString());
+
+      if (isAvailable && !isAlreadyBooked) {
+        assignedAdmin = admin;
+        break;
+      }
+    }
+
+    if (!assignedAdmin) {
+      return res.status(400).json({
+        message: `No available admin for ${selectedDate} at ${formattedTime}.`,
+      });
+    }
+
+    // ✅ Create and save the booking
     const newBooking = new Booking({
-      userId, // ✅ Store only userId
-      adminId: admin._id,
+      userId,
+      adminId: assignedAdmin._id,
       date: selectedDate,
       time: formattedTime,
       serviceAddress: user.serviceAddress,
@@ -90,42 +77,33 @@ const bookCleaning = async (req, res) => {
     });
 
     await newBooking.save();
-    console.log("✅ Booking saved to database:", newBooking);
+    console.log("✅ Booking saved:", newBooking);
 
-    let timeSlotsToKeep = [];
+    // ✅ Remove this time from only the assigned admin's availability
+    assignedAdmin.availability = assignedAdmin.availability.map(slot => {
+      if (slot.date === selectedDate) {
+        return {
+          date: slot.date,
+          times: slot.times.filter(t => t.trim() !== formattedTime),
+        };
+      }
+      return slot;
+    });
 
-    if (formattedTime === "3:30 PM") {
-      timeSlotsToKeep = ["6:30 PM"]; // ✅ Only keep 6:30 PM if 3:30 PM is booked
-    } else if (formattedTime === "6:30 PM") {
-      timeSlotsToKeep = ["3:30 PM"]; // ✅ Only keep 3:30 PM if 6:30 PM is booked
-    } else {
-      timeSlotsToKeep = []; // ✅ Remove all times for that day if any other time is booked
-    }
+    await assignedAdmin.save();
+    console.log("✅ Updated availability for assigned admin");
 
-    console.log("🔹 Updated Available Times to Keep:", timeSlotsToKeep);
-
-    // ✅ Filter out booked and non-allowed times
-    availabilityData[selectedDate] = availabilityData[selectedDate].filter(time => timeSlotsToKeep.includes(time));
-
-    console.log("🔹 Final Updated Availability:", availabilityData[selectedDate]);
-
-    await User.findByIdAndUpdate(admin._id, {
-      $set: { [`availability.${selectedDate}`]: availabilityData[selectedDate] }
-    }, { new: true });
-
-    console.log("✅ Availability Updated After Booking:", availabilityData);
-
+    // ✅ Send confirmation email
     await sendBookingConfirmationEmail(user, newBooking);
 
     res.status(200).json({
       message: "✅ Booking successful!",
       booking: newBooking,
-      updatedAvailability: availabilityData,
     });
 
   } catch (error) {
     console.error("❌ Booking error:", error);
-    res.status(500).json({ message: "Error processing booking", error });
+    res.status(500).json({ message: "Error processing booking", error: error.message });
   }
 };
 
@@ -137,10 +115,10 @@ const getUserBookings = async (req, res) => {
     }
 
     const bookings = await Booking.find({ userId })
-    .populate("userId", "firstName lastName email")
-    .sort({ date: -1 })
-    .select("date time serviceAddress city state zipCode addOns userId");
-  
+      .populate("userId", "firstName lastName email")
+      .sort({ date: -1 })
+      .select("date time serviceAddress city state zipCode addOns userId");
+
     res.status(200).json({ bookings });
   } catch (error) {
     console.error("❌ Error fetching bookings:", error);

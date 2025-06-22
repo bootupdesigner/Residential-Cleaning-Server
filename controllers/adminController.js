@@ -6,48 +6,54 @@ const setAvailability = async (req, res) => {
   console.log("🔹 Received Availability Request:", req.body);
 
   try {
-    let { availability } = req.body;
+    const { availability } = req.body;
+    const adminId = req.user.id; // ✅ Get admin ID from token
 
-    // ✅ Validate input format
     if (!availability || typeof availability !== "object" || Array.isArray(availability)) {
       return res.status(400).json({ message: "Invalid format. Availability should be an object with date keys and time arrays." });
     }
 
-    // ✅ Ensure all dates and times are valid
-    const formattedAvailability = {};
+    // ✅ Convert object format to array of { date, times }
+    const newAvailability = [];
+
     for (const [date, times] of Object.entries(availability)) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return res.status(400).json({ message: `Invalid date format for ${date}. Use YYYY-MM-DD.` });
+        return res.status(400).json({ message: `Invalid date format: ${date}` });
       }
-      if (!Array.isArray(times) || times.some(time => typeof time !== "string")) {
-        return res.status(400).json({ message: `Invalid times format for ${date}. Expected an array of string times.` });
+
+      if (!Array.isArray(times) || times.some(t => typeof t !== "string")) {
+        return res.status(400).json({ message: `Invalid time array for ${date}` });
       }
-      formattedAvailability[date] = times.map(time => time.trim()); // ✅ Normalize time values
+
+      newAvailability.push({
+        date,
+        times: [...new Set(times.map(t => t.trim()))],
+      });
     }
 
-    // ✅ Find Admin
-    const admin = await User.findOne({ role: "admin" });
-    if (!admin) {
-      return res.status(404).json({ message: "Admin not found" });
+    // ✅ Find this admin
+    const admin = await User.findById(adminId);
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can set availability." });
     }
 
-    console.log("🔹 Existing Availability (Before Update):", admin.availability);
+    // ✅ Replace or merge availability
+    const mergedAvailability = [...admin.availability];
 
-    // ✅ Merge with existing availability
-    let existingAvailability = admin.availability || {};
+    newAvailability.forEach(({ date, times }) => {
+      const existing = mergedAvailability.find(d => d.date === date);
+      if (existing) {
+        existing.times = [...new Set([...existing.times, ...times])];
+      } else {
+        mergedAvailability.push({ date, times });
+      }
+    });
 
-    let updatedAvailability = { ...existingAvailability };
-
-    for (const [date, times] of Object.entries(formattedAvailability)) {
-      updatedAvailability[date] = [...new Set([...(existingAvailability[date] || []), ...times])]; // ✅ Prevent duplicates
-    }
-
-    // ✅ Save new availability
-    admin.availability = updatedAvailability;
+    admin.availability = mergedAvailability;
     await admin.save();
 
-    console.log("✅ Availability updated:", updatedAvailability);
-    res.status(200).json({ message: "Availability updated successfully", availability: updatedAvailability });
+    console.log("✅ Availability updated for admin:", admin.email);
+    res.status(200).json({ message: "Availability updated successfully", availability: mergedAvailability });
 
   } catch (error) {
     console.error("❌ Error updating availability:", error);
@@ -56,26 +62,35 @@ const setAvailability = async (req, res) => {
 };
 
 // Get Admin Availability
+
 const getAvailability = async (req, res) => {
   try {
-    console.log("🔹 Fetching admin availability...");
+    const admins = await User.find({ role: "admin" }).select("firstName lastName availability");
 
-    const admin = await User.findOne({ role: "admin" }).select("availability");
-    console.log("✅ Retrieved Admin Document:", admin);
+    const availabilityMap = {};
 
-    if (!admin || !admin.availability || Object.keys(admin.availability).length === 0) {
-      console.error("❌ No availability data found in database.");
-      return res.status(200).json({ availability: {} }); // ✅ Return empty object instead of error
-    }
+    admins.forEach((admin) => {
+      admin.availability.forEach(({ date, times }) => {
+        if (!availabilityMap[date]) availabilityMap[date] = {};
 
-    let availabilityData = admin.availability;
+        times.forEach((time) => {
+          const trimmed = time.trim();
+          if (!availabilityMap[date][trimmed]) {
+            availabilityMap[date][trimmed] = [];
+          }
 
-    console.log("✅ Retrieved Full Availability:", availabilityData);
-    return res.status(200).json({ availability: availabilityData });
+          availabilityMap[date][trimmed].push({
+            adminId: admin._id,
+            adminName: `${admin.firstName} ${admin.lastName}`
+          });
+        });
+      });
+    });
 
+    res.status(200).json({ availability: availabilityMap });
   } catch (error) {
-    console.error("❌ Error fetching availability:", error);
-    return res.status(500).json({ message: "Error fetching availability", error: error.message });
+    console.error("❌ Error retrieving availability:", error);
+    res.status(500).json({ message: "Error retrieving availability", error: error.message });
   }
 };
 
@@ -98,103 +113,86 @@ console.log("🔹 Exporting functions from `adminController.js`:", { setAvailabi
 
 const updateAvailability = async (req, res) => {
   try {
-    console.log("🔹 Incoming Request Data:", req.body);
+    const { date, times } = req.body;
 
-    let { date, times } = req.body;
-
-    // ✅ Ensure the date is a string
-    if (typeof date !== "string") {
-      console.error("❌ Date is not a string:", date);
-      return res.status(400).json({ message: "Date must be a string in YYYY-MM-DD format." });
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // ✅ Validate date format
-    if (!moment(date, "YYYY-MM-DD", true).isValid()) {
-      console.error("❌ Invalid Date Format:", date);
-      return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD." });
+    if (!date || typeof date !== "string" || !moment(date, "YYYY-MM-DD", true).isValid()) {
+      return res.status(400).json({ message: "Invalid or missing date. Format must be YYYY-MM-DD." });
     }
 
-    // ✅ Ensure times is an array of strings
-    if (!Array.isArray(times) || times.some(time => typeof time !== "string")) {
-      console.error("❌ Invalid Times Format:", times);
-      return res.status(400).json({ message: "Invalid time format. Expected an array of strings." });
+    if (!Array.isArray(times) || times.some(t => typeof t !== "string")) {
+      return res.status(400).json({ message: "Times must be an array of strings." });
     }
 
-    // ✅ Find Admin
-    const admin = await User.findOne({ role: "admin" });
-    if (!admin) {
-      console.error("❌ Admin Not Found");
-      return res.status(404).json({ message: "Admin not found" });
+    const admin = await User.findById(req.user.id);
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can update availability." });
     }
 
-    console.log("🔹 Current Availability (Before Update):", admin.availability);
+    const existing = admin.availability || [];
+    const index = existing.findIndex(entry => entry.date === date);
 
-    // ✅ Convert Map to Object if needed
-    let availabilityData = admin.availability instanceof Map
-      ? Object.fromEntries(admin.availability)
-      : { ...admin.availability };
+    if (index !== -1) {
+      // Merge and clean times
+      const merged = Array.from(
+        new Set([...existing[index].times, ...times.map(t => t.trim())])
+      ).sort();
+      admin.availability[index].times = merged;
+    } else {
+      // Add new date entry
+      admin.availability.push({
+        date,
+        times: times.map(t => t.trim()).sort()
+      });
+    }
 
-    // ✅ Ensure times are stored as an array of strings
-    availabilityData[date] = times.map(time => time.trim());
-
-    console.log("🔹 Updated Availability Data:", availabilityData);
-
-    // ✅ Convert back to Map before saving
-    admin.availability = availabilityData;
     await admin.save();
 
-    console.log("✅ Availability updated successfully");
-    res.status(200).json({ message: "Availability updated successfully", availability: availabilityData });
+    const updatedEntry = admin.availability.find(entry => entry.date === date);
+    return res.status(200).json({
+      message: "Availability updated",
+      updated: updatedEntry
+    });
 
   } catch (error) {
     console.error("❌ Error updating availability:", error);
-    res.status(500).json({ message: "Error updating availability", error: error.message });
+    return res.status(500).json({ message: "Error updating availability", error: error.message });
   }
 };
-
-
 
 const deleteAvailability = async (req, res) => {
   try {
     const { date } = req.body;
 
-    // ✅ Validate input
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     if (!date || !moment(date, "YYYY-MM-DD", true).isValid()) {
-      return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD." });
+      return res.status(400).json({ message: "Invalid or missing date. Format must be YYYY-MM-DD." });
     }
 
-    // ✅ Find Admin
-    const admin = await User.findOne({ role: "admin" });
-    if (!admin) {
-      return res.status(404).json({ message: "Admin not found" });
+    const admin = await User.findById(req.user.id);
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({ message: "Only admins can delete availability." });
     }
 
-    // ✅ Convert Map to Object if needed
-    let availabilityData = admin.availability instanceof Map
-      ? Object.fromEntries(admin.availability)
-      : { ...admin.availability };
-
-    // ✅ Remove only if the date exists
-    if (!availabilityData[date]) {
-      return res.status(404).json({ message: `No availability found for ${date}.` });
-    }
-
-    delete availabilityData[date];
-
-    // ✅ Convert back to Map before saving
-    admin.availability = new Map(Object.entries(availabilityData));
+    admin.availability = (admin.availability || []).filter(entry => entry.date !== date);
     await admin.save();
 
-    console.log("✅ Availability deleted for:", date);
-    res.status(200).json({ message: `Availability for ${date} deleted successfully`, availability: availabilityData });
+    return res.status(200).json({
+      message: `Availability for ${date} deleted.`,
+      remainingAvailability: admin.availability
+    });
 
   } catch (error) {
     console.error("❌ Error deleting availability:", error);
-    res.status(500).json({ message: "Error deleting availability", error: error.message });
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-
 
 // ✅ Ensure functions are exported correctly
 module.exports = { setAvailability, getAvailability, getAdminId, updateAvailability, deleteAvailability };
